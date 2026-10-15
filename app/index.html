@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#131419">
+<meta name="app-version" content="__APP_VERSION__">
+<meta name="description" content="Virtuelle Rennen auf dem Spinningrad – gesteuert über den Puls der Amazfit-Uhr.">
+<title>aoSPIN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-48.png" sizes="48x48">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #131419; --panel: #1d1f27; --panel2: #23252e; --line: #3a3c45; --fg: #ffffff; --dim: #b8bac2; --dim2: #d4d5da;
+    --z1: #00b5a6; --z2: #124f92; --z3: #247d4d; --z4: #f9a73b; --z5: #cc2d3f; --mag: #c2185b; --free: #717378;
+    --ok: #41d98a; --bad: #ff8a93;
+    --r: 18px;
+    font-size: min(1.18vw, 2.1vh);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; overflow: hidden;
+    -webkit-tap-highlight-color: transparent; user-select: none; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: none; background: none; }
+  input { user-select: text; }
+  .num { font-variant-numeric: tabular-nums; }
+  #app { height: 100vh; display: flex; flex-direction: column; padding: 0.9rem; gap: 0.7rem; }
+
+  /* ---------- Kopfzeile ---------- */
+  #top { height: 3.1rem; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 0.4rem; }
+  #top .l { display: flex; align-items: baseline; gap: 1rem; min-width: 0; }
+  #brand { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.03em; }
+  #ctx { font-size: 0.95rem; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #top .c { font-size: 1.4rem; font-weight: 700; }
+  #top .r { display: flex; align-items: center; gap: 0.7rem; flex: none; }
+  #hrPill { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--dim); padding: 0 0.6rem; min-height: 2.6rem; border-radius: 10px; }
+  #hrPill i { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: #5a5c66; display: inline-block; }
+  #hrPill.ok i { background: var(--ok); } #hrPill.wait i { background: #ffd60a; }
+  #ver { font-size: 0.8rem; color: #8b8d96; }
+  .btn { min-height: 2.6rem; padding: 0 1.05rem; border-radius: 10px; border: 1.5px solid var(--fg); color: var(--fg);
+    font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
+  .btn.solid { background: var(--fg); color: var(--bg); font-weight: 800; }
+  .btn:active { transform: scale(0.98); }
+  .btn[disabled] { opacity: 0.4; pointer-events: none; }
+
+  .screen { flex: 1; min-height: 0; display: none; }
+  .screen.on { display: grid; }
+  .tile { border-radius: var(--r); padding: 1.2rem 1.35rem; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .dark { background: var(--panel); }
+  .t-h { font-size: 1.05rem; font-weight: 700; }
+  .t-sub { font-size: 0.95rem; color: var(--dim); }
+  .row12 { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.7rem; min-height: 0; }
+
+  /* ---------- Start ---------- */
+  #s-start { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.7rem; }
+  #courses { grid-column: span 8; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+  .course { border-radius: var(--r); padding: 1.2rem 1.3rem; display: flex; flex-direction: column; justify-content: space-between; text-align: left; }
+  .course.sel { box-shadow: 0 0 0 4px var(--bg), 0 0 0 8px var(--fg); }
+  .course b { font-size: 1.65rem; font-weight: 800; display: block; }
+  .course .d { font-size: 1rem; font-weight: 600; margin-top: 0.2rem; }
+  .course .x { font-size: 0.95rem; margin-top: 0.15rem; }
+  .course svg { width: 100%; height: 3.6rem; }
+  .course .best { font-size: 0.9rem; font-weight: 600; }
+  #startSide { grid-column: span 4; gap: 1.05rem; }
+  .seg { display: grid; gap: 0.5rem; }
+  .seg button { min-height: 3rem; border-radius: 10px; border: 1.5px solid var(--fg); font-size: 1rem; font-weight: 700; }
+  .seg button.on { background: var(--fg); color: var(--bg); }
+  #goalText { font-size: 0.95rem; line-height: 1.45; color: var(--dim); min-height: 2.8rem; }
+  #startInfo { font-size: 0.88rem; color: var(--dim); border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.8rem; line-height: 1.5; }
+  #btnGo { margin-top: auto; min-height: 4.2rem; border-radius: 14px; background: var(--fg); color: var(--bg); font-size: 1.5rem; font-weight: 800; }
+  .navrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  .navrow .btn { padding: 0 0.4rem; font-size: 0.9rem; }
+
+  /* ---------- Fahrt ---------- */
+  #s-ride { grid-template-rows: 1.6fr 1fr; gap: 0.7rem; }
+  #trackTile { grid-column: span 8; gap: 0.5rem; }
+  #trackTile .hd, #trackTile .ft { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  #trackTile .ft { font-size: 0.88rem; color: var(--dim); }
+  #legend { display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: flex-end; }
+  #legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .dot { width: 0.75rem; height: 0.75rem; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px #fff; flex: none; }
+  #track { flex: 1; min-height: 0; width: 100%; }
+  #pulseTile { grid-column: span 4; justify-content: space-between; transition: background 0.25s; position: relative; }
+  #pulseTile .hd { display: flex; justify-content: space-between; font-size: 1.05rem; font-weight: 700; }
+  #pulseBig { display: flex; align-items: baseline; gap: 0.6rem; }
+  #pulseNum { font-size: 9.6rem; font-weight: 800; line-height: 0.95; letter-spacing: -0.03em; }
+  #pulseBig small { font-size: 1.5rem; font-weight: 600; }
+  #zoneTitle { font-size: 1.75rem; font-weight: 800; }
+  #zoneRange { font-size: 1.1rem; font-weight: 500; }
+  #zoneWarn { font-size: 1.1rem; font-weight: 800; min-height: 1.4rem; }
+  #zbar { display: flex; gap: 0.35rem; align-items: center; height: 2.1rem; }
+  #zbar div { flex: 1; border-radius: 0.6rem; height: 1.2rem; box-shadow: 0 0 0 1.5px rgba(0,0,0,0.35); }
+  #zbar div.on { height: 2rem; }
+  #zlab { display: flex; gap: 0.35rem; font-size: 0.82rem; font-weight: 700; } #zlab div { flex: 1; text-align: center; }
+  .bt { grid-column: span 3; justify-content: space-between; }
+  #placeNum { font-size: 7rem; font-weight: 800; line-height: 0.9; letter-spacing: -0.03em; }
+  #gaps { display: flex; flex-direction: column; font-size: 1rem; margin-top: 0.3rem; }
+  #gaps div { display: flex; align-items: center; gap: 0.6rem; padding: 0.22rem 0; border-top: 1px solid rgba(255,255,255,0.35); }
+  #gaps div:first-child { border-top: none; }
+  #gaps .n { width: 0.9rem; } #gaps .nm { flex: 1; } #gaps .me { font-weight: 800; }
+  #resTile { color: #000; }
+  #resTop { display: flex; justify-content: space-between; align-items: baseline; }
+  #resNums { display: flex; align-items: flex-end; gap: 0.7rem; }
+  #resNums .k { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; }
+  #resNums .v { font-size: 3.4rem; font-weight: 800; line-height: 0.95; }
+  #istBox { text-align: left; border-radius: 10px; padding: 0.1rem 0.4rem 0.2rem; margin-left: -0.4rem; }
+  #istBox:hover { background: rgba(0,0,0,0.08); }
+  #sollBox { border: 3px solid #000; border-radius: 10px; padding: 0.1rem 0.6rem 0.25rem; }
+  #scale { display: flex; gap: 0.25rem; } #scale div { flex: 1; height: 1.2rem; border-radius: 0.35rem; }
+  #resText { font-size: 1.12rem; font-weight: 800; }
+  #btnTurned { min-height: 2.8rem; border-radius: 10px; border: 2px solid #000; font-size: 1.05rem; font-weight: 800; color: #000; }
+  #btnTurned[disabled] { opacity: 0.35; }
+  #restKm { white-space: nowrap; font-size: 4.9rem; font-weight: 800; line-height: 0.9; letter-spacing: -0.02em; }
+  .bar { height: 0.7rem; border-radius: 0.35rem; background: rgba(255,255,255,0.3); overflow: hidden; } .bar div { height: 100%; background: #fff; border-radius: 0.35rem; width: 0; }
+  #rideBtns { display: flex; gap: 0.6rem; }
+
+  /* ---------- Ergebnis ---------- */
+  #s-result { grid-template-rows: 1.1fr 1fr; gap: 0.7rem; }
+  #s-result .tile { justify-content: space-between; }
+  .big { font-size: 7.5rem; font-weight: 800; line-height: 0.9; letter-spacing: -0.03em; }
+  .mid { font-size: 3.3rem; font-weight: 800; line-height: 1; }
+  .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem 1.2rem; }
+  .kv small { font-size: 0.95rem; display: block; }
+  #zt { display: flex; flex-direction: column; gap: 0.45rem; }
+  #zt .r { display: flex; align-items: center; gap: 0.8rem; }
+  #zt .r .n { width: 11rem; font-size: 1rem; font-weight: 600; } #zt .r .b { flex: 1; height: 1.8rem; }
+  #zt .r .b div { height: 100%; border-radius: 0.5rem; } #zt .r .m { width: 4.5rem; text-align: right; font-size: 1.05rem; font-weight: 700; }
+
+  /* ---------- Kalibrierung ---------- */
+  #s-calib { grid-template-rows: 1.6fr 1fr; gap: 0.7rem; }
+  #s-calib.intro { grid-template-rows: 1fr; }
+  #calibIntro { grid-column: span 12; flex-direction: row; gap: 2rem; }
+  #calibIntro .col { flex: 1; display: flex; flex-direction: column; gap: 0.9rem; font-size: 1.05rem; line-height: 1.5; }
+  #calibIntro ol { margin: 0; padding-left: 1.3rem; } #calibIntro li { margin-bottom: 0.35rem; }
+  #rpe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.45rem; }
+  #rpe button { min-height: 2.8rem; border-radius: 10px; border: 1.5px solid #fff; font-size: 1.15rem; font-weight: 700; }
+  #rpe button.on { background: #fff; color: var(--mag); font-weight: 800; }
+  #cTable { width: 100%; border-collapse: collapse; font-size: 1.05rem; }
+  #cTable td, #cTable th { padding: 0.45rem 0.4rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.15); }
+  #cTable th { color: var(--dim); font-weight: 600; font-size: 0.9rem; }
+
+  /* ---------- Einstellungen / Verlauf ---------- */
+  #s-settings, #s-history { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.7rem; }
+  .scroll { overflow-y: auto; }
+  .zhead, .zrow { display: flex; align-items: center; gap: 1.1rem; padding: 0 0.8rem; }
+  .zhead { font-size: 0.82rem; font-weight: 700; letter-spacing: 0.06em; color: var(--dim); }
+  .zrow { background: var(--panel2); border-radius: 14px; padding: 0.6rem 0.8rem; }
+  .zsw { width: 3rem; height: 3rem; border-radius: 0.7rem; flex: none; }
+  .zname { flex: 1; } .zname b { font-size: 1.3rem; display: block; } .zname span { font-size: 0.95rem; color: var(--dim); }
+  .in { width: 7.5rem; height: 3.4rem; border-radius: 12px; border: 2px solid #4a4c55; background: var(--bg); color: #fff;
+    font-size: 1.6rem; font-weight: 800; text-align: center; }
+  .in.bad { border-color: var(--z5); color: var(--bad); }
+  .zbis { width: 7.5rem; text-align: right; font-size: 1.1rem; color: var(--dim2); }
+  .lbl { font-size: 0.95rem; color: var(--dim); margin-bottom: 0.35rem; }
+  .stack { display: flex; flex-direction: column; gap: 0.6rem; }
+  .wbtn { min-height: 3.2rem; border-radius: 12px; border: 1.5px solid #fff; font-size: 1.02rem; font-weight: 700; text-align: left; padding: 0 1rem; }
+  .wbtn.solid { background: #fff; color: var(--bg); font-weight: 800; }
+  .note { font-size: 0.92rem; line-height: 1.45; color: var(--dim); }
+  .chk { display: flex; align-items: center; gap: 0.7rem; font-size: 1rem; min-height: 2.6rem; }
+  .chk input { width: 1.4rem; height: 1.4rem; accent-color: #fff; }
+  input[type=range] { width: 100%; accent-color: #fff; height: 2.2rem; }
+  #hist { width: 100%; border-collapse: collapse; font-size: 0.98rem; }
+  #hist td, #hist th { padding: 0.5rem 0.4rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.12); }
+  #hist th { color: var(--dim); font-weight: 600; font-size: 0.85rem; }
+
+  /* ---------- Überlagerungen ---------- */
+  .ov { position: fixed; inset: 0; background: rgba(10,10,14,0.82); display: none; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
+  .ov.on { display: flex; }
+  .dlg { background: var(--panel); border-radius: var(--r); padding: 1.6rem 1.8rem; width: min(46rem, 100%); display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 0 0 1.5px var(--line); }
+  .dlg h2 { margin: 0; font-size: 1.6rem; }
+  .dlg p { margin: 0; font-size: 1.1rem; line-height: 1.5; color: var(--dim2); }
+  .dlg .btns { display: flex; gap: 0.7rem; justify-content: flex-end; flex-wrap: wrap; }
+  .dlg .btns .btn { min-height: 3.2rem; font-size: 1.05rem; padding: 0 1.4rem; }
+  #pickGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
+  #pickGrid button { min-height: 4.2rem; border-radius: 12px; border: 1.5px solid #fff; font-size: 1.8rem; font-weight: 800; }
+  #pickGrid button.on { background: #fff; color: var(--bg); }
+  #countNum { font-size: 7rem; font-weight: 800; text-align: center; line-height: 1; }
+  #updateBar { position: fixed; left: 50%; transform: translateX(-50%); top: 0.8rem; z-index: 70; background: #124f92; color: #fff;
+    border-radius: 14px; padding: 0.7rem 0.8rem 0.7rem 1.2rem; display: flex; align-items: center; gap: 1rem; font-size: 1.05rem; font-weight: 600;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  #updateBar[hidden] { display: none; }
+  #toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 80; background: #2a2c35; color: #fff;
+    border-radius: 12px; padding: 0.8rem 1.2rem; font-size: 1.05rem; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  #toast[hidden] { display: none; } #toast.err { background: #5a1520; }
+  #pauseOv .dlg { align-items: center; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="l"><div id="brand">aoSPIN</div><div id="ctx"></div></div>
+    <div class="c num" id="topClock"></div>
+    <div class="r">
+      <button id="hrPill" type="button" title="Pulsquelle"><i></i><span id="hrPillText">Nicht verbunden</span></button>
+      <span id="ver"></span>
+      <button class="btn" id="btnReload" type="button" title="Neu laden (Strg + R)">Neu laden</button>
+      <span id="topBtns" style="display:flex;gap:0.7rem"></span>
+    </div>
+  </header>
+
+  <!-- ===== START ===== -->
+  <section class="screen" id="s-start">
+    <div id="courses"></div>
+    <div class="tile dark" id="startSide">
+      <div><div class="t-h" style="margin-bottom:0.6rem">Format</div><div class="seg" id="fmtSeg" style="grid-template-columns:repeat(3,minmax(0,1fr))"></div></div>
+      <div><div class="t-h" style="margin-bottom:0.6rem">Trainingsziel</div><div class="seg" id="goalSeg" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div></div>
+      <div id="goalText"></div>
+      <div id="startInfo"></div>
+      <div class="navrow">
+        <button class="btn" type="button" id="toCalib">Kalibrieren</button>
+        <button class="btn" type="button" id="toHistory">Verlauf</button>
+        <button class="btn" type="button" id="toSettings">Einstellungen</button>
+      </div>
+      <button id="btnGo" type="button">Rennen starten</button>
+    </div>
+  </section>
+
+  <!-- ===== FAHRT ===== -->
+  <section class="screen" id="s-ride">
+    <div class="row12">
+      <div class="tile dark" id="trackTile">
+        <div class="hd"><div class="t-h" id="trackName">Strecke</div><div class="t-sub num" id="trackKm"></div></div>
+        <canvas id="track"></canvas>
+        <div class="ft"><div id="nextInfo"></div><div id="legend"></div></div>
+      </div>
+      <div class="tile" id="pulseTile">
+        <div class="hd"><div>Puls</div><div id="pulseSoll" style="font-weight:500"></div></div>
+        <div id="pulseBig"><div id="pulseNum" class="num">–</div><small>bpm</small></div>
+        <div><div id="zoneTitle"></div><div id="zoneRange"></div><div id="zoneWarn"></div></div>
+        <div><div id="zbar"></div><div id="zlab"></div></div>
+      </div>
+    </div>
+    <div class="row12">
+      <div class="tile bt" id="placeTile" style="background:var(--mag)">
+        <div class="t-h" id="placeHead">Platzierung</div>
+        <div style="display:flex;align-items:baseline;gap:0.7rem"><div id="placeNum">–</div><div id="placeOf" style="font-size:1.5rem;font-weight:600"></div></div>
+        <div id="placeGap" style="font-size:1.05rem;font-weight:600"></div>
+      </div>
+      <div class="tile bt" id="gapTile" style="background:var(--z2);justify-content:flex-start">
+        <div class="t-h">Abstände</div>
+        <div id="gaps" class="num"></div>
+      </div>
+      <div class="tile bt" id="resTile" style="background:var(--z4)">
+        <div id="resTop"><div class="t-h">Widerstand</div><div id="resHint" style="font-size:0.88rem;font-weight:600"></div></div>
+        <div id="resNums">
+          <button id="istBox" type="button" title="Stellung korrigieren"><div class="k">IST</div><div class="v" id="istV">0</div></button>
+          <svg id="resArrow" viewBox="0 0 40 24" style="width:2.3rem;height:1.4rem;margin-bottom:0.8rem" aria-hidden="true"><path d="M2 12 H34 M24 3 L35 12 L24 21" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div id="sollBox"><div class="k">SOLL</div><div class="v" id="sollV">1</div></div>
+        </div>
+        <div id="scale"></div>
+        <div id="resText"></div>
+        <button id="btnTurned" type="button">Gedreht</button>
+      </div>
+      <div class="tile bt" id="restTile" style="background:var(--z3)">
+        <div class="t-h" id="restHead">Restdistanz</div>
+        <div id="restKm" class="num">–</div>
+        <div class="stack" style="gap:0.5rem"><div id="restTime" style="font-size:1.05rem;font-weight:600"></div><div class="bar"><div id="restBar"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ERGEBNIS ===== -->
+  <section class="screen" id="s-result">
+    <div class="row12">
+      <div class="tile" style="grid-column:span 4;background:var(--mag)">
+        <div class="t-h" id="rPlaceHead">Platzierung</div>
+        <div style="display:flex;align-items:baseline;gap:0.7rem"><div class="big" id="rPlace">–</div><div id="rOf" style="font-size:1.6rem;font-weight:600"></div></div>
+        <div id="rPlaceSub" style="font-size:1.1rem;font-weight:600"></div>
+      </div>
+      <div class="tile" style="grid-column:span 4;background:var(--z2)">
+        <div class="t-h">Puls</div>
+        <div class="kv">
+          <div><small>Durchschnitt</small><div class="mid num" id="rAvg">–</div></div>
+          <div><small>Höchstwert</small><div class="mid num" id="rMax">–</div></div>
+          <div><small id="rRecLbl">Erholung nach 1 min</small><div class="mid num" id="rRec">…</div></div>
+          <div><small>Fahrzeit</small><div class="mid num" id="rTime">–</div></div>
+        </div>
+      </div>
+      <div class="tile" style="grid-column:span 4;background:var(--z1);color:#000">
+        <div class="t-h">Ghost · deine Bestzeit</div>
+        <div class="mid num" id="rGhost" style="font-size:3.8rem">–</div>
+        <div id="rGhostSub" style="font-size:1.1rem;font-weight:600"></div>
+      </div>
+    </div>
+    <div class="row12">
+      <div class="tile dark" style="grid-column:span 8;gap:0.7rem">
+        <div style="display:flex;justify-content:space-between"><div class="t-h">Zeit in Zonen</div><div class="t-sub" id="rZtSum"></div></div>
+        <div id="zt"></div>
+      </div>
+      <div class="tile" style="grid-column:span 4;background:var(--z4);color:#000">
+        <div class="t-h">HFmax</div>
+        <div><div class="mid num" id="rHf" style="font-size:4.2rem">–</div><div id="rHfSub" style="font-size:1.1rem;font-weight:600;margin-top:0.3rem"></div></div>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+          <button class="btn" id="rHfUp" type="button" style="border-color:#000;color:#000" hidden>Übernehmen</button>
+          <button class="btn" id="rDone" type="button" style="border-color:#000;color:#000;margin-left:auto">Neues Rennen</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== KALIBRIERUNG ===== -->
+  <section class="screen intro" id="s-calib">
+    <div class="tile dark" id="calibIntro">
+      <div class="col">
+        <div style="font-size:1.6rem;font-weight:800">Kalibrierfahrt · ca. 30 Minuten</div>
+        <div>aoSPIN lernt, wie stark dein Puls auf jede Stellung der Widerstandsschraube reagiert. Danach passen die Ansagen im Rennen zu dir.</div>
+        <ol>
+          <li>Schraube ganz aufdrehen (Anschlag) – das ist Stellung 0.</li>
+          <li>5 Minuten einfahren auf Stellung 1.</li>
+          <li>7 Stufen à 3 Minuten: 1 · 1½ · 2 · 2¼ · 2½ · 2¾ · 3.</li>
+          <li>Immer gleich schnell treten – der Takt-Ton gibt 80 Umdrehungen pro Minute vor.</li>
+          <li>3 Minuten ausfahren auf Stellung 0, dabei wird die Erholung gemessen.</li>
+        </ol>
+        <div class="note" id="calibLast"></div>
+      </div>
+      <div class="col">
+        <div class="t-h">Sicherheit</div>
+        <div>Die Fahrt endet automatisch, wenn dein Puls 5 Sekunden lang über <b id="calibAbortTxt">165</b> liegt. Mit „Schaffe ich nicht“ beendest du sie jederzeit; fehlende Stufen werden dann geschätzt und so markiert.</div>
+        <label class="chk"><input type="checkbox" id="metroChk" checked> Takt-Ton (80 pro Minute)</label>
+        <div id="calibTable"></div>
+        <div style="margin-top:auto;display:flex;gap:0.7rem">
+          <button class="btn" id="calibBack" type="button" style="min-height:3.6rem;min-width:8rem">Zurück</button>
+          <button class="btn solid" id="calibGo" type="button" style="flex:1;min-height:3.6rem;font-size:1.3rem">Kalibrierfahrt starten</button>
+        </div>
+      </div>
+    </div>
+    <div class="row12" id="calibRun1">
+      <div class="tile dark" style="grid-column:span 8;gap:0.4rem">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="t-h">Deine Widerstandskurve</div><div class="t-sub">Puls im Mittel der letzten 60 s je Stellung</div></div>
+        <canvas id="calibChart" style="flex:1;min-height:0;width:100%"></canvas>
+      </div>
+      <div class="tile" id="cPulseTile" style="grid-column:span 4;justify-content:space-between">
+        <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:700"><div>Puls</div><div id="cPulseNote" style="font-weight:500"></div></div>
+        <div style="display:flex;align-items:baseline;gap:0.6rem"><div id="cPulse" class="num" style="font-size:9.6rem;font-weight:800;line-height:0.95">–</div><small style="font-size:1.5rem;font-weight:600">bpm</small></div>
+        <div><div id="cZone" style="font-size:1.75rem;font-weight:800"></div><div id="cAbortInfo" style="font-size:1.1rem"></div></div>
+      </div>
+    </div>
+    <div class="row12" id="calibRun2">
+      <div class="tile" style="grid-column:span 4;background:var(--z4);color:#000;justify-content:space-between">
+        <div style="display:flex;justify-content:space-between"><div class="t-h" id="cPhase">Stellung</div><div id="cStepNo" style="font-weight:700"></div></div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:0.6rem">
+          <div style="display:flex;align-items:flex-end;gap:0.6rem">
+            <button id="cIst" type="button" style="text-align:left;color:#000;border-radius:10px;padding:0.1rem 0.4rem 0.2rem;margin-left:-0.4rem"><div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em">IST</div><div id="cIstV" style="font-size:3.4rem;font-weight:800;line-height:0.95">0</div></button>
+            <svg id="cArrow" viewBox="0 0 40 24" style="width:2.3rem;height:1.4rem;margin-bottom:0.8rem" aria-hidden="true"><path d="M2 12 H34 M24 3 L35 12 L24 21" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div id="cSollBox" style="border:3px solid #000;border-radius:10px;padding:0.1rem 0.6rem 0.25rem"><div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em">SOLL</div><div id="cSollV" style="font-size:3.4rem;font-weight:800;line-height:0.95">1</div></div>
+          </div>
+          <div style="text-align:right"><div id="cLeft" class="num" style="font-size:2.5rem;font-weight:800;line-height:1">0:00</div><div style="font-size:0.9rem;font-weight:600">noch auf dieser Stufe</div></div>
+        </div>
+        <div id="cNext" style="font-size:1.08rem;font-weight:700"></div>
+        <button id="cTurned" type="button" style="min-height:2.8rem;border-radius:10px;border:2px solid #000;font-size:1.05rem;font-weight:800;color:#000">Gedreht</button>
+      </div>
+      <div class="tile" style="grid-column:span 4;background:var(--z2);justify-content:space-between">
+        <div class="t-h">Trittfrequenz halten</div>
+        <div style="display:flex;align-items:baseline;gap:0.6rem"><div style="font-size:5.6rem;font-weight:800;line-height:0.9">80</div><div style="font-size:1.4rem;font-weight:600">pro Minute</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem">
+          <div id="beatDots" style="display:flex;gap:0.6rem"></div>
+          <button class="btn" id="metroBtn" type="button">Takt-Ton an</button>
+        </div>
+      </div>
+      <div class="tile" style="grid-column:span 4;background:var(--mag);justify-content:space-between">
+        <div class="t-h" id="rpeHead">Wie hart war die letzte Stufe? (1–10)</div>
+        <div id="rpe"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem">
+          <div style="font-size:0.95rem">Antippen ist freiwillig.</div>
+          <button class="btn" id="cStop" type="button">Schaffe ich nicht</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== EINSTELLUNGEN ===== -->
+  <section class="screen" id="s-settings">
+    <div class="tile dark scroll" style="grid-column:span 7;gap:0.6rem">
+      <div class="zhead"><div style="width:3rem"></div><div style="flex:1">ZONE</div><div style="width:7.5rem;text-align:center">AB BPM</div><div style="width:7.5rem;text-align:right">BIS</div></div>
+      <div id="zList" class="stack"></div>
+      <div style="display:flex;justify-content:space-between;gap:1rem;padding:0.2rem 0.8rem 0" class="note"><div>Darunter: Aufwärmen · Kein Signal: Rennen pausiert</div><div id="zMsg" style="font-weight:700"></div></div>
+      <div class="t-h" style="margin-top:0.8rem">Grundwerte</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.8rem">
+        <div><div class="lbl">HFmax</div><input class="in" id="inHf" inputmode="numeric" maxlength="3" style="width:100%"></div>
+        <div><div class="lbl">Ruhepuls</div><input class="in" id="inRp" inputmode="numeric" maxlength="3" style="width:100%"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.6rem">
+        <button class="wbtn solid" type="button" id="zKarv">Aus Pulsreserve</button>
+        <button class="wbtn" type="button" id="zPct">Aus % HFmax</button>
+        <button class="wbtn" type="button" id="zAoPuls">Aus ao Puls</button>
+      </div>
+      <div class="note">Jede Eingabe wird sofort gespeichert. Die Obergrenze einer Zone ergibt sich aus der Untergrenze der nächsten, Zone 5 endet bei HFmax.</div>
+    </div>
+    <div class="tile dark scroll" style="grid-column:span 5;gap:0.8rem">
+      <div class="t-h">Pulsquelle</div>
+      <div style="display:flex;align-items:center;gap:0.8rem;font-size:1.05rem"><span id="btStatus">Nicht verbunden</span><span id="btDevice" class="t-sub"></span></div>
+      <div class="stack">
+        <button class="wbtn solid" type="button" id="btConnect">Uhr verbinden</button>
+        <button class="wbtn" type="button" id="btAll">Uhr nicht in der Liste? Alle Geräte zeigen</button>
+      </div>
+      <div class="note">Auf der Amazfit Active 2 die App <b>Herzfrequenz-Push</b> öffnen und das Senden einschalten. Die Uhr beliefert meist nur ein Gerät gleichzeitig – ao Puls auf dem Handy also vorher trennen.</div>
+      <label class="chk"><input type="checkbox" id="simChk"> Testmodus ohne Uhr (Puls per Regler oder Pfeiltasten)</label>
+      <div id="simBox" hidden><input type="range" id="simRange" min="60" max="190" value="120"><div class="note">Simulierter Puls: <b id="simVal">120</b></div></div>
+      <div class="t-h" style="margin-top:0.4rem">Rennen</div>
+      <label class="chk"><input type="checkbox" id="driftChk"> Puls-Drift ausgleichen (ab 30 Minuten)</label>
+      <label class="chk"><input type="checkbox" id="soundChk"> Töne bei Widerstands-Ansagen</label>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.8rem">
+        <div><div class="lbl">Hinweis Zone 5 nach (Sekunden)</div><input class="in" id="inZ5" inputmode="numeric" maxlength="3" style="width:100%"></div>
+        <div><div class="lbl">Abbruch Kalibrierung ab (bpm)</div><input class="in" id="inAbort" inputmode="numeric" maxlength="3" style="width:100%"></div>
+      </div>
+      <div class="t-h" style="margin-top:0.4rem">Daten</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.6rem">
+        <button class="wbtn" type="button" id="exportBtn">Sichern (Datei)</button>
+        <button class="wbtn" type="button" id="importBtn">Einlesen</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <div style="margin-top:auto;display:flex;justify-content:flex-end"><button class="btn solid" type="button" id="settingsDone" style="min-height:3.2rem;padding:0 2rem">Fertig</button></div>
+    </div>
+  </section>
+
+  <!-- ===== VERLAUF ===== -->
+  <section class="screen" id="s-history">
+    <div class="tile dark scroll" style="grid-column:span 7">
+      <div class="t-h" style="margin-bottom:0.6rem">Rennen</div>
+      <table id="hist"></table>
+    </div>
+    <div class="tile dark" style="grid-column:span 5;gap:0.6rem">
+      <div class="t-h">Fitness-Trend · Kalibrierungen</div>
+      <canvas id="trendChart" style="flex:1;min-height:0;width:100%"></canvas>
+      <div class="note" id="trendText"></div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn solid" type="button" id="historyDone" style="min-height:3.2rem;padding:0 2rem">Fertig</button></div>
+    </div>
+  </section>
+</div>
+
+<!-- Überlagerungen -->
+<div class="ov" id="pickOv"><div class="dlg"><h2>Auf welcher Stellung bist du?</h2><div id="pickGrid"></div><div class="btns"><button class="btn" type="button" id="pickCancel">Abbrechen</button></div></div></div>
+<div class="ov" id="countOv"><div class="dlg" style="align-items:center;text-align:center"><h2 id="countTitle">Schraube ganz aufdrehen</h2><p id="countText">Dreh die Widerstandsschraube bis zum Anschlag auf (Stellung 0) und tritt locker los.</p><div id="countNum">10</div><div class="btns"><button class="btn" type="button" id="countCancel">Abbrechen</button><button class="btn solid" type="button" id="countGo">Los</button></div></div></div>
+<div class="ov" id="pauseOv"><div class="dlg"><h2 id="pauseTitle">Pause</h2><p id="pauseText"></p><div class="btns"><button class="btn" type="button" id="pauseEnd">Beenden</button><button class="btn solid" type="button" id="pauseGo">Weiter</button></div></div></div>
+<div class="ov" id="askOv"><div class="dlg"><h2 id="askTitle"></h2><p id="askText"></p><div class="btns" id="askBtns"></div></div></div>
+<div id="updateBar" hidden><span>Neue Version verfügbar</span><button class="btn solid" type="button" id="updateBtn">Aktualisieren</button></div>
+<div id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

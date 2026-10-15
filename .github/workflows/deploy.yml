@@ -1,0 +1,99 @@
+name: Prüfen und veröffentlichen
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.ver.outputs.semver }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Version bestimmen
+        id: ver
+        run: |
+          V=$(tr -d ' \n\r' < VERSION)
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::VERSION muss die Form 1.2.3 haben"; exit 1; }
+          echo "semver=$V" >> "$GITHUB_OUTPUT"
+          echo "app=$V (Build ${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+
+      - name: Code prüfen
+        run: |
+          node --check app/app.js
+          node --check app/sw.js
+          node -e '
+            const fs = require("fs");
+            JSON.parse(fs.readFileSync("app/manifest.webmanifest", "utf8"));
+            const html = fs.readFileSync("app/index.html", "utf8");
+            if (!html.includes("app.js")) throw new Error("index.html lädt app.js nicht");
+            console.log("index.html und manifest OK");
+          '
+          for f in $(node -e 'JSON.parse(require("fs").readFileSync("app/manifest.webmanifest","utf8")).icons.forEach(i=>console.log(i.src))'); do
+            test -f "app/$f" || { echo "::error::Icon fehlt: $f"; exit 1; }
+          done
+
+      - name: Pages vorbereiten
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Seite zusammenstellen
+        run: |
+          rm -rf _site && cp -r app _site
+          sed -i "s/__APP_VERSION__/${{ steps.ver.outputs.app }}/g" _site/index.html _site/sw.js
+          if grep -q "__APP_VERSION__" _site/index.html _site/sw.js; then echo "::error::Versionsstempel fehlt"; exit 1; fi
+          printf '{"version":"%s","build":%s,"commit":"%s"}\n' \
+            "${{ steps.ver.outputs.semver }}" "${{ github.run_number }}" "${GITHUB_SHA::7}" > _site/version.json
+          URL="${{ steps.pages.outputs.base_url }}"
+          if [ -n "$URL" ]; then npx --yes qrcode@1.5.4 -t png -w 480 -m 2 -o _site/qr.png "$URL/"; fi
+          touch _site/.nojekyll
+          echo "Veröffentlicht wird: ${{ steps.ver.outputs.app }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  tag:
+    if: github.event_name != 'pull_request'
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versions-Tag setzen (einmal pro Version)
+        run: |
+          T="v${{ needs.build.outputs.semver }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$T" >/dev/null; then
+            echo "Tag $T existiert bereits."
+          else
+            git tag "$T" && git push origin "$T"
+          fi
